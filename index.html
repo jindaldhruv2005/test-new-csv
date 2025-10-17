@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Hello World - CSV Viewer</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #ffffff;
+      --fg: #222222;
+      --muted: #666;
+      --accent: #2563eb;
+      --border: #dcdcdc;
+      --zebra: #f7f7f7;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0b0b0b;
+        --fg: #e8e8e8;
+        --muted: #a0a0a0;
+        --accent: #60a5fa;
+        --border: #2a2a2a;
+        --zebra: #141414;
+      }
+    }
+    html, body {
+      height: 100%;
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      background: var(--bg);
+      color: var(--fg);
+    }
+    .wrap {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+    }
+    .sub {
+      margin: 0 0 24px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .panel {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      background: transparent;
+      box-shadow: 0 1px 0 rgba(0,0,0,.03);
+    }
+    .panel h2 {
+      margin: 0 0 12px;
+      font-size: 18px;
+    }
+    .status {
+      font-size: 13px;
+      color: var(--muted);
+      margin: 8px 0 16px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    thead th {
+      text-align: left;
+      background: var(--zebra);
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+      padding: 10px 12px;
+    }
+    tbody td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    tbody tr:nth-child(even) td {
+      background: color-mix(in oklab, var(--zebra) 60%, transparent);
+    }
+    code.kbd {
+      background: var(--zebra);
+      border: 1px solid var(--border);
+      border-bottom-width: 2px;
+      padding: 1px 6px;
+      border-radius: 6px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 12px;
+    }
+    .hint {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 12px;
+    }
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Hello World</h1>
+    <p class="sub">This page displays the contents of sample.csv as an HTML table.</p>
+
+    <div class="panel">
+      <h2>Sales Data (sample.csv)</h2>
+      <div id="status" class="status">Loading sample.csv…</div>
+      <div id="table-container" role="region" aria-live="polite" aria-busy="true"></div>
+      <div class="hint">
+        If you open this file directly via file:// and your browser blocks loading sample.csv, a built‑in fallback copy will be used.
+        For best results, serve locally (e.g., <code class="kbd">python -m http.server</code>).
+      </div>
+    </div>
+  </div>
+
+  <!-- Inline fallback copy of sample.csv (used if fetching the real file fails) -->
+  <script type="text/csv" id="csv-inline">
+id,product,sales
+1,Product A,259.69
+2,Product B,256.16
+  </script>
+
+  <script>
+    function parseCSV(text) {
+      const rows = [];
+      let row = [];
+      let cell = '';
+      let inQuotes = false;
+
+      for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        if (inQuotes) {
+          if (c === '"') {
+            if (text[i + 1] === '"') {
+              cell += '"';
+              i++;
+            } else {
+              inQuotes = false;
+            }
+          } else {
+            cell += c;
+          }
+        } else {
+          if (c === '"') {
+            inQuotes = true;
+          } else if (c === ',') {
+            row.push(cell);
+            cell = '';
+          } else if (c === '\n') {
+            row.push(cell);
+            rows.push(row);
+            row = [];
+            cell = '';
+          } else if (c === '\r') {
+            // ignore \r (will be followed by \n in CRLF)
+          } else {
+            cell += c;
+          }
+        }
+      }
+      if (cell !== '' || row.length) {
+        row.push(cell);
+        rows.push(row);
+      }
+      // trim empty trailing lines
+      return rows.filter(r => r && r.length && !(r.length === 1 && r[0].trim() === ''));
+    }
+
+    function renderTable(rows, container) {
+      if (!rows || !rows.length) {
+        container.innerHTML = '<div class="status">No data found in CSV.</div>';
+        return;
+      }
+
+      const table = document.createElement('table');
+      const thead = document.createElement('thead');
+      const tbody = document.createElement('tbody');
+
+      const headerRow = document.createElement('tr');
+      rows[0].forEach(h => {
+        const th = document.createElement('th');
+        th.textContent = h;
+        headerRow.appendChild(th);
+      });
+      thead.appendChild(headerRow);
+
+      for (let i = 1; i < rows.length; i++) {
+        const tr = document.createElement('tr');
+        rows[i].forEach(cell => {
+          const td = document.createElement('td');
+          td.textContent = cell;
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      }
+
+      table.appendChild(thead);
+      table.appendChild(tbody);
+
+      container.innerHTML = '';
+      container.appendChild(table);
+    }
+
+    async function loadCSV() {
+      const status = document.getElementById('status');
+      const container = document.getElementById('table-container');
+      container.setAttribute('aria-busy', 'true');
+
+      // Try to fetch the actual file from the same directory.
+      try {
+        const res = await fetch('sample.csv', { cache: 'no-store' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const text = await res.text();
+        const rows = parseCSV(text);
+        renderTable(rows, container);
+        status.textContent = 'Loaded sample.csv';
+      } catch (err) {
+        // Fallback to inline CSV if fetch failed (common with file://)
+        const inline = document.getElementById('csv-inline');
+        if (inline && inline.textContent.trim().length) {
+          const text = inline.textContent.trim();
+          const rows = parseCSV(text);
+          renderTable(rows, container);
+          status.innerHTML = 'Loaded fallback copy of sample.csv (fetch failed).';
+        } else {
+          status.innerHTML = 'Unable to load sample.csv. Ensure the file is present and you are serving this page via HTTP.';
+          container.innerHTML = '';
+        }
+      } finally {
+        container.setAttribute('aria-busy', 'false');
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', loadCSV);
+  </script>
+</body>
+</html>
